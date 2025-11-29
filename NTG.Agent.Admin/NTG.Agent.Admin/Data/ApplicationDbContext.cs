@@ -14,14 +14,15 @@ namespace NTG.Agent.Admin.Data
             {
                 Id = new Guid("d5147680-87f5-41dc-aff2-e041959c2fa1").ToString(),
                 Name = "Admin",
-                NormalizedName = "ADMIN"
+                NormalizedName = "ADMIN",
+                ConcurrencyStamp = "c3a91a6b-a975-4542-af12-321515222481"
             });
 
             modelBuilder.Entity<ApplicationUser>().HasData(new ApplicationUser
             {
                 Id = new Guid("e0afe23f-b53c-4ad8-b718-cb4ff5bb9f71").ToString(),
-                UserName = "admin@ngtagent.com",
-                Email = "admin@ngtagent.com",
+                UserName = "admin@ntgagent.com",
+                Email = "admin@ntgagent.com",
                 NormalizedEmail = "ADMIN@NTGAGENT.COM",
                 NormalizedUserName = "ADMIN@NTGAGENT.COM",
                 AccessFailedCount = 0, 
@@ -38,6 +39,14 @@ namespace NTG.Agent.Admin.Data
             {
                 UserId = "e0afe23f-b53c-4ad8-b718-cb4ff5bb9f71",
                 RoleId = "d5147680-87f5-41dc-aff2-e041959c2fa1"
+            });
+
+            modelBuilder.Entity<IdentityRole>().HasData(new IdentityRole
+            {
+                Id = new Guid("3dc04c42-9b42-4920-b7f2-29dfc2c5d169").ToString(),
+                Name = "Anonymous",
+                NormalizedName = "ANONYMOUS",
+                ConcurrencyStamp = "94602b5b-18d2-4043-9761-c64818c856cd"
             });
         }
     }

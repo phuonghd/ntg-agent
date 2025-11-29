@@ -1,14 +1,19 @@
 ﻿@attribute [Authorize]
 
-@using NTG.Agent.Shared.Dtos.Chats
+@using NTG.Agent.Common.Dtos.Chats
+@using NTG.Agent.Common.Dtos.SharedConversations
+@using NTG.Agent.WebClient.Client.Components.Shared
 @using Microsoft.AspNetCore.Components
 @using System.Threading
+@inject ILogger<Conversation> Logger
 @inject IJSRuntime JS
 @inject ConversationClient ConversationClient
+@inject SharedConversationClient SharedConversationClient
 @inject NavigationManager Navigation
 @inject ConversationState ConversationState
+@implements IAsyncDisposable
 
-<div class="conversation-sidebar @(IsSidebarCollapsed ? "collapsed" : "")">
+<div class="conversation-sidebar @(IsSidebarCollapsed ? "collapsed" : "")" @onclick="CloseSettingsMenuIfOpen">
     <div class="conversation-header">
         <div class="header-content">
             <div class="app-logo">
@@ -16,12 +21,21 @@
                 <span class="app-title">NTG Agent</span>
             </div>
         </div>
-        <div class="sidebar-toggle">
-            <button @onclick="ToggleSidebar" class="toggle-btn" aria-label="@(IsSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar")" title="@(IsSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar")">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" class="toggle-icon">
-                    <path fill-rule="evenodd" d="@(IsSidebarCollapsed ? "M3.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L9.293 8 3.646 2.354a.5.5 0 0 1 0-.708z" : "M9.354 1.646a.5.5 0 0 0-.708 0l-6 6a.5.5 0 0 0 0 .708l6 6a.5.5 0 0 0 .708-.708L4.707 8l4.647-5.646a.5.5 0 0 0 0-.708z")" />
+        <div class="header-controls">
+            <!-- Mobile close button -->
+            <button class="mobile-close-btn" onclick="closeMobileMenu()" aria-label="Close menu">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
+                    <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854Z"/>
                 </svg>
             </button>
+            
+            <div class="sidebar-toggle">
+                <button @onclick="ToggleSidebar" class="toggle-btn" aria-label="@(IsSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar")" title="@(IsSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar")">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" class="toggle-icon">
+                        <path fill-rule="evenodd" d="@(IsSidebarCollapsed ? "M3.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L9.293 8 3.646 2.354a.5.5 0 0 1 0-.708z" : "M9.354 1.646a.5.5 0 0 0-.708 0l-6 6a.5.5 0 0 0 0 .708l6 6a.5.5 0 0 0 .708-.708L4.707 8l4.647-5.646a.5.5 0 0 0 0-.708z")" />
+                    </svg>
+                </button>
+            </div>
         </div>
     </div>
     
@@ -67,6 +81,7 @@
                             <div class="context-menu">
                                 <button class="rename-conversation" @onclick="() => RenameConversation(conversation.Id, conversation.Name)"><i class="bi bi-pencil-square"></i> Rename</button>
                                 <button class="delete-conversation" @onclick="() => DeleteConversation(conversation.Id)"><i class="bi bi-trash3"></i> Delete</button>
+                                <button class="share-conversation" @onclick="() => ShareConversation(conversation.Id, conversation.Name)"><i class="bi bi-share"></i> Share</button>
                             </div>
                         }
                     </li>
@@ -82,10 +97,30 @@
             </div>
         }
     </div>
-    <div class="conversation-footer">
-        @*TODO*@
+    
+    <div class="sidebar-footer">
+        <div class="settings-container" @onclick:stopPropagation>
+            <button class="settings-button footer-settings" @onclick="ToggleSettingsMenu" title="Settings">
+                <i class="bi bi-gear"></i>
+                <span class="settings-text">Settings</span>
+            </button>
+            @if (showSettingsMenu)
+            {
+                <div class="settings-dropdown" @onclick:stopPropagation>
+                    <button class="dropdown-item" @onclick="OpenManageSharedModal">
+                        <i class="bi bi-share"></i>
+                        <span>Manage Shared Conversations</span>
+                    </button>
+                </div>
+            }
+        </div>
     </div>
 </div>
+
+@if (showManageSharedModal)
+{
+    <SharedConversationManager OnClose="CloseManageSharedModal" OnSharedConversationChanged="HandleSharedConversationChanged" />
+}
 
 @if (showDeleteConfirmation)
 {
@@ -106,6 +141,16 @@
     </div>
 }
 
+@if (showShareModal)
+{
+    <ShareConversationModal IsVisible="showShareModal" 
+                            ConversationId="@(shareConversationRequest?.ConversationId ?? Guid.Empty)" 
+                            ConversationName="@(shareConversationRequest?.Name ?? "")"
+                            ChatId=null
+                            OnClose="CancelShare" 
+                            OnSharedConversationChanged="HandleSharedConversationChanged" />
+}
+
 @code {
     private IList<ConversationListItem> conversations = [];
     private Guid? activeConversationId = null;
@@ -117,6 +162,15 @@
     private bool showDeleteConfirmation = false;
     private ConversationListItem? conversationToDelete;
     private bool IsSidebarCollapsed { get; set; } = false;
+
+    private bool showShareModal = false;
+    private ShareConversationRequest? shareConversationRequest = null;
+    
+    // Manage shared conversations modal
+    private bool showManageSharedModal = false;
+    
+    // Settings dropdown menu
+    private bool showSettingsMenu = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -130,7 +184,6 @@
     {
         if (firstRender)
         {
-            // Register for location changes to maintain sidebar state
             Navigation.LocationChanged += HandleLocationChanged;
         }
 
@@ -140,19 +193,15 @@
     private async void HandleLocationChanged(object? sender, LocationChangedEventArgs e)
     {
         UpdateActiveConversationFromUrl();
-        // When the location changes, reapply the sidebar state
         await JS.InvokeVoidAsync("updateSidebarState", IsSidebarCollapsed);
         await InvokeAsync(StateHasChanged);
     }
 
-    #region Load Conversations
     private async Task LoadAndActiveConversations()
     {
         UpdateActiveConversationFromUrl();
         conversations = await ConversationClient.GetConversationsAsync();
     }
-    #endregion
-    #region Active Conversation Item
     private void UpdateActiveConversationFromUrl()
     {
         var currentUri = Navigation.Uri;
@@ -196,14 +245,7 @@
         await LoadAndActiveConversations();
         StateHasChanged();
     }
-    public void Dispose()
-    {
-        ConversationState.OnConversationAdded -= HandleConversationAdded;
-    }
 
-    #endregion
-
-    #region Handle Context Menu
     private void ShowMenu(Guid conversationId)
     {
         hoveredConversationId = conversationId;
@@ -240,10 +282,9 @@
         // Unregister from location changes
         Navigation.LocationChanged -= HandleLocationChanged;
         await JS.InvokeVoidAsync("removeClickOutsideHandler");
+        ConversationState.OnConversationAdded -= HandleConversationAdded;
     }
-    #endregion
 
-    #region Rename Conversation
     private async Task RenameConversation(Guid conversationId, string currentName)
     {
         contextMenuConversationId = null;
@@ -275,15 +316,13 @@
             try
             {
                 await ConversationClient.UpdateConversationAsync(renamingConversationId.Value, renameValue.Trim());
-                // Since ConversationListItem is a record type, we need to replace it entirely
                 conversations = conversations.Select(c => c.Id == renamingConversationId.Value
                     ? new ConversationListItem(c.Id, renameValue.Trim())
                     : c).ToList();
             }
             catch (Exception ex)
             {
-                // TODO: Handle error - could show a toast notification
-                Console.WriteLine($"Failed to rename conversation: {ex.Message}");
+                Logger.LogError(ex, "Failed to rename conversation");
             }
         }
 
@@ -297,9 +336,6 @@
         StateHasChanged();
     }
 
-    #endregion
-
-    #region Delete A Conversation
     private async Task DeleteConversation(Guid conversationId)
     {
         contextMenuConversationId = null;
@@ -326,7 +362,6 @@
                 await ConversationClient.DeleteConversationAsync(conversationToDelete.Id);
                 conversations = conversations.Where(c => c.Id != conversationToDelete.Id).ToList();
 
-                // If we deleted the active conversation, navigate to home
                 if (activeConversationId == conversationToDelete.Id)
                 {
                     Navigation.NavigateTo("/");
@@ -334,8 +369,7 @@
             }
             catch (Exception ex)
             {
-                // TODO: Handle error - could show a toast notification
-                Console.WriteLine($"Error: Failed to delete conversation. Exception: {ex.Message}");
+                Logger.LogError(ex, "Error: Failed to delete conversation.");
             }
         }
 
@@ -344,20 +378,36 @@
         await JS.InvokeVoidAsync("showInputChatContainer");
         StateHasChanged();
     }
-    #endregion
 
-    #region Toggle Slide Bar
+    private async Task ShareConversation(Guid conversationId, string conversationName)
+    {
+        contextMenuConversationId = null;
+        shareConversationRequest = new ShareConversationRequest();
+        shareConversationRequest.ConversationId = conversationId;
+        shareConversationRequest.Name = conversationName;
+
+        showShareModal = true;
+        await JS.InvokeVoidAsync("hideInputChatContainer");
+        StateHasChanged();
+    }
+
+    private async Task CancelShare()
+    {
+        showShareModal = false;
+        shareConversationRequest = null;
+        await JS.InvokeVoidAsync("showInputChatContainer");
+        StateHasChanged();
+    }
+
     private async Task LoadSidebarStateAsync()
     {
         try
         {
-            // Use the new JS function that returns a proper boolean
             IsSidebarCollapsed = await JS.InvokeAsync<bool>("getSidebarState");
         }
         catch (Exception ex)
         {
-            // Provide a fallback in case of JS interop errors
-            Console.WriteLine($"Error loading sidebar state: {ex.Message}");
+            Logger.LogError(ex, "Error loading sidebar state");
             IsSidebarCollapsed = false;
         }
     }
@@ -366,12 +416,11 @@
     {
         try
         {
-            // Use the new JS function for setting state
             await JS.InvokeVoidAsync("setSidebarState", IsSidebarCollapsed);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error saving sidebar state: {ex.Message}");
+            Logger.LogError(ex, "Error saving sidebar state");
         }
     }
 
@@ -381,5 +430,39 @@
         await SaveSidebarStateAsync();
         await JS.InvokeVoidAsync("updateSidebarState", IsSidebarCollapsed);
     }
-    #endregion
+
+    private void ToggleSettingsMenu()
+    {
+        showSettingsMenu = !showSettingsMenu;
+        StateHasChanged();
+    }
+
+    private void CloseSettingsMenuIfOpen()
+    {
+        if (showSettingsMenu)
+        {
+            showSettingsMenu = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OpenManageSharedModal()
+    {
+        showSettingsMenu = false;
+        showManageSharedModal = true;
+        await JS.InvokeVoidAsync("hideInputChatContainer");
+        StateHasChanged();
+    }
+
+    private async Task CloseManageSharedModal()
+    {
+        showManageSharedModal = false;
+        await JS.InvokeVoidAsync("showInputChatContainer");
+        StateHasChanged();
+    }
+
+    private void HandleSharedConversationChanged()
+    {
+        StateHasChanged();
+    }
 }

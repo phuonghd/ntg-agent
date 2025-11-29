@@ -6,7 +6,6 @@ public class Agent
 {
     public Agent()
     {
-        Id = Guid.NewGuid();
         CreatedAt = DateTime.UtcNow;
         UpdatedAt = DateTime.UtcNow;
     }
@@ -15,7 +14,23 @@ public class Agent
 
     public string Name { get; set; } = string.Empty;
 
+    public string? Description { get; set; }
+
     public string Instructions { get; set; } = string.Empty;
+
+    public string ProviderName { get; set; } = string.Empty;
+
+    public string ProviderModelName { get; set; } = string.Empty;
+
+    public string ProviderEndpoint { get; set; } = string.Empty;
+
+    public string ProviderApiKey { get; set; } = string.Empty;
+
+    public bool IsPublished { get; set; }
+
+    public bool IsDefault { get; set; }
+
+    public string? McpServer { get; set; } = string.Empty;
 
     public DateTime CreatedAt { get; set; }
 
@@ -28,4 +43,7 @@ public class Agent
     public Guid UpdatedByUserId { get; set; }
 
     public User UpdatedByUser { get; set; } = null!;
+
+    public ICollection<AgentTools> AgentTools { get; set; } = new List<AgentTools>();
+
 }

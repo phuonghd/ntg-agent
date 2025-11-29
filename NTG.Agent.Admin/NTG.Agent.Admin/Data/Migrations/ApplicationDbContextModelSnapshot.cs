@@ -17,7 +17,7 @@ namespace NTG.Agent.Admin.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.7")
+                .HasAnnotation("ProductVersion", "10.0.0")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -52,8 +52,16 @@ namespace NTG.Agent.Admin.Migrations
                         new
                         {
                             Id = "d5147680-87f5-41dc-aff2-e041959c2fa1",
+                            ConcurrencyStamp = "c3a91a6b-a975-4542-af12-321515222481",
                             Name = "Admin",
                             NormalizedName = "ADMIN"
+                        },
+                        new
+                        {
+                            Id = "3dc04c42-9b42-4920-b7f2-29dfc2c5d169",
+                            ConcurrencyStamp = "94602b5b-18d2-4043-9761-c64818c856cd",
+                            Name = "Anonymous",
+                            NormalizedName = "ANONYMOUS"
                         });
                 });
 
@@ -189,6 +197,12 @@ namespace NTG.Agent.Admin.Migrations
                     b.Property<bool>("EmailConfirmed")
                         .HasColumnType("bit");
 
+                    b.Property<string>("FirstName")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("LastName")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<bool>("LockoutEnabled")
                         .HasColumnType("bit");
 
@@ -240,7 +254,7 @@ namespace NTG.Agent.Admin.Migrations
                             Id = "e0afe23f-b53c-4ad8-b718-cb4ff5bb9f71",
                             AccessFailedCount = 0,
                             ConcurrencyStamp = "101cd6ae-a8ef-4a37-97fd-04ac2dd630e4",
-                            Email = "admin@ngtagent.com",
+                            Email = "admin@ntgagent.com",
                             EmailConfirmed = true,
                             LockoutEnabled = true,
                             NormalizedEmail = "ADMIN@NTGAGENT.COM",
@@ -249,7 +263,7 @@ namespace NTG.Agent.Admin.Migrations
                             PhoneNumberConfirmed = false,
                             SecurityStamp = "a9565acb-cee6-425f-9833-419a793f5fba",
                             TwoFactorEnabled = false,
-                            UserName = "admin@ngtagent.com"
+                            UserName = "admin@ntgagent.com"
                         });
                 });
 
