@@ -16,6 +16,8 @@ public class ConversationsControllerTests
     private AgentDbContext _context;
     private ConversationsController _controller;
     private Guid _testUserId;
+    private Moq.Mock<NTG.Agent.Orchestrator.Services.AnonymousSessions.IAnonymousSessionService> _mockAnonymousSessionService;
+    private Moq.Mock<NTG.Agent.Orchestrator.Services.AnonymousSessions.IIpAddressService> _mockIpAddressService;
   
     [SetUp]
     public void Setup()
@@ -25,12 +27,18 @@ public class ConversationsControllerTests
             .Options;
         _context = new AgentDbContext(options);
         _testUserId = Guid.NewGuid();
+        
+        // Create mock services
+        _mockAnonymousSessionService = new Moq.Mock<NTG.Agent.Orchestrator.Services.AnonymousSessions.IAnonymousSessionService>();
+        _mockIpAddressService = new Moq.Mock<NTG.Agent.Orchestrator.Services.AnonymousSessions.IIpAddressService>();
+        
         // Mock the user principal
         var user = new ClaimsPrincipal(new ClaimsIdentity(
         [
                 new Claim(ClaimTypes.NameIdentifier, _testUserId.ToString()),
         ], "mock"));
-        _controller = new ConversationsController(_context)
+        
+        _controller = new ConversationsController(_context, _mockAnonymousSessionService.Object, _mockIpAddressService.Object)
         {
             ControllerContext = new ControllerContext
             {
@@ -55,7 +63,9 @@ public class ConversationsControllerTests
         var actionResult = await _controller.GetConversations();
         // Assert
         Assert.That(actionResult, Is.Not.Null);
-        var conversations = actionResult.Value as List<ConversationListItem>;
+        var response = actionResult.Value as ConversationListResponse;
+        Assert.That(response, Is.Not.Null);
+        var conversations = response.Items;
         Assert.That(conversations, Is.Not.Null.And.Count.EqualTo(3));
         using (Assert.EnterMultipleScope())
         {
@@ -71,7 +81,9 @@ public class ConversationsControllerTests
         // Act
         var actionResult = await _controller.GetConversations();
         // Assert
-        var conversations = actionResult.Value as List<ConversationListItem>;
+        var response = actionResult.Value as ConversationListResponse;
+        Assert.That(response, Is.Not.Null);
+        var conversations = response.Items;
         Assert.That(conversations, Is.Not.Null);
         Assert.That(conversations, Is.Empty, "The list of conversations should be empty.");
     }
@@ -674,7 +686,7 @@ public class ConversationsControllerTests
     public async Task PostConversation_WhenUserIsAnonymous_CreatesConversationWithSessionId()
     {
         // Arrange
-        var anonymousController = new ConversationsController(_context)
+        var anonymousController = new ConversationsController(_context, _mockAnonymousSessionService.Object, _mockIpAddressService.Object)
         {
             ControllerContext = new ControllerContext
             {
@@ -699,7 +711,7 @@ public class ConversationsControllerTests
     public async Task PostConversation_WhenAnonymousWithoutSessionId_CreatesConversationWithoutSessionId()
     {
         // Arrange
-        var anonymousController = new ConversationsController(_context)
+        var anonymousController = new ConversationsController(_context, _mockAnonymousSessionService.Object, _mockIpAddressService.Object)
         {
             ControllerContext = new ControllerContext
             {
@@ -789,7 +801,7 @@ public class ConversationsControllerTests
         };
         await _context.Conversations.AddAsync(conversation);
         await _context.SaveChangesAsync();
-        var anonymousController = new ConversationsController(_context)
+        var anonymousController = new ConversationsController(_context, _mockAnonymousSessionService.Object, _mockIpAddressService.Object)
         {
             ControllerContext = new ControllerContext
             {
@@ -809,7 +821,7 @@ public class ConversationsControllerTests
         // Arrange
         var conversationId = Guid.NewGuid();
         var invalidSessionId = "invalid-session-id";
-        var anonymousController = new ConversationsController(_context)
+        var anonymousController = new ConversationsController(_context, _mockAnonymousSessionService.Object, _mockIpAddressService.Object)
         {
             ControllerContext = new ControllerContext
             {
@@ -841,7 +853,7 @@ public class ConversationsControllerTests
         };
         await _context.Conversations.AddAsync(conversation);
         await _context.SaveChangesAsync();
-        var anonymousController = new ConversationsController(_context)
+        var anonymousController = new ConversationsController(_context, _mockAnonymousSessionService.Object, _mockIpAddressService.Object)
         {
             ControllerContext = new ControllerContext
             {
@@ -879,7 +891,7 @@ public class ConversationsControllerTests
         };
         await _context.ChatMessages.AddAsync(message);
         await _context.SaveChangesAsync();
-        var anonymousController = new ConversationsController(_context)
+        var anonymousController = new ConversationsController(_context, _mockAnonymousSessionService.Object, _mockIpAddressService.Object)
         {
             ControllerContext = new ControllerContext
             {
@@ -899,7 +911,7 @@ public class ConversationsControllerTests
         // Arrange
         var conversationId = Guid.NewGuid();
         var invalidSessionId = "invalid-session-id";
-        var anonymousController = new ConversationsController(_context)
+        var anonymousController = new ConversationsController(_context, _mockAnonymousSessionService.Object, _mockIpAddressService.Object)
         {
             ControllerContext = new ControllerContext
             {
@@ -931,7 +943,7 @@ public class ConversationsControllerTests
         };
         await _context.Conversations.AddAsync(conversation);
         await _context.SaveChangesAsync();
-        var anonymousController = new ConversationsController(_context)
+        var anonymousController = new ConversationsController(_context, _mockAnonymousSessionService.Object, _mockIpAddressService.Object)
         {
             ControllerContext = new ControllerContext
             {
@@ -948,7 +960,7 @@ public class ConversationsControllerTests
     {
         // Arrange
         var conversationId = Guid.NewGuid();
-        var anonymousController = new ConversationsController(_context)
+        var anonymousController = new ConversationsController(_context, _mockAnonymousSessionService.Object, _mockIpAddressService.Object)
         {
             ControllerContext = new ControllerContext
             {
@@ -981,3 +993,4 @@ public class ConversationsControllerTests
         await _context.SaveChangesAsync();
     }
 }
+

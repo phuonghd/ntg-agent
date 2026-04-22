@@ -2,11 +2,14 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
+using NTG.Agent.Common.Dtos.AnonymousSessions;
 using NTG.Agent.Common.Dtos.Chats;
+using NTG.Agent.Common.Dtos.Constants;
 using NTG.Agent.Common.Dtos.Conversations;
 using NTG.Agent.Orchestrator.Data;
 using NTG.Agent.Orchestrator.Extentions;
 using NTG.Agent.Orchestrator.Models.Chat;
+using NTG.Agent.Orchestrator.Services.AnonymousSessions;
 
 namespace NTG.Agent.Orchestrator.Controllers;
 
@@ -15,28 +18,64 @@ namespace NTG.Agent.Orchestrator.Controllers;
 public class ConversationsController : ControllerBase
 {
     private readonly AgentDbContext _context;
+    private readonly IAnonymousSessionService _anonymousSessionService;
+    private readonly IIpAddressService _ipAddressService;
 
-    public ConversationsController(AgentDbContext context)
+    public ConversationsController(
+        AgentDbContext context,
+        IAnonymousSessionService anonymousSessionService,
+        IIpAddressService ipAddressService)
     {
         _context = context;
+        _anonymousSessionService = anonymousSessionService;
+        _ipAddressService = ipAddressService;
     }
     /// <summary>
-    /// Retrieves a list of conversations for the current user.
+    /// Retrieves a paginated list of conversations for the current user.
     /// </summary>
     /// <remarks>The conversations are returned in descending order based on the last update time. This method
-    /// requires the user to be authenticated.</remarks>
+    /// requires the user to be authenticated. Supports pagination for lazy loading of conversation history.</remarks>
+    /// <param name="pageNumber">The page number to retrieve (1-based). Defaults to 1.</param>
+    /// <param name="pageSize">The number of items per page. Defaults to <see cref="PaginationConstants.DefaultPageSize"/>. Maximum is <see cref="PaginationConstants.MaxPageSize"/>.</param>
     /// <returns>A task that represents the asynchronous operation. The task result contains an  <see cref="ActionResult{T}"/> of
-    /// <see cref="IEnumerable{T}"/> containing  <see cref="ConversationListItem"/> objects, each representing a
-    /// conversation.</returns>
+    /// <see cref="ConversationListResponse"/> containing paginated conversation items and metadata.</returns>
     [Authorize]
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<ConversationListItem>>> GetConversations()
+    public async Task<ActionResult<ConversationListResponse>> GetConversations(
+        [FromQuery] int pageNumber = 1, 
+        [FromQuery] int pageSize = PaginationConstants.DefaultPageSize)
     {
-        return await _context.Conversations
-            .Where(c => c.UserId == User.GetUserId())
+        // Validate and normalize pagination parameters
+        if (pageNumber < 1) pageNumber = 1;
+        if (pageSize < 1 || pageSize > PaginationConstants.MaxPageSize) pageSize = PaginationConstants.DefaultPageSize;
+
+        var userId = User.GetUserId();
+
+        // Get total count for pagination metadata
+        var totalCount = await _context.Conversations
+            .Where(c => c.UserId == userId)
+            .CountAsync();
+
+        // Get paginated conversations
+        var conversations = await _context.Conversations
+            .Where(c => c.UserId == userId)
             .OrderByDescending(c => c.UpdatedAt)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
             .Select(c => new ConversationListItem(c.Id, c.Name))
             .ToListAsync();
+
+        var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+
+        return new ConversationListResponse
+        {
+            Items = conversations,
+            PageNumber = pageNumber,
+            PageSize = pageSize,
+            TotalCount = totalCount,
+            TotalPages = totalPages,
+            HasMore = pageNumber * pageSize < totalCount
+        };
     }
 
     /// <summary>
@@ -121,6 +160,8 @@ public class ConversationsController : ControllerBase
             {
                 Id = x.Id,
                 Content = x.Content,
+                ThinkingContent = x.ThinkingContent,
+                ThinkingDurationMs = x.ThinkingDurationMs,
                 Role = x.Role.Value,
                 Reaction = x.Reaction,
                 UserComment = x.UserComment
@@ -128,6 +169,28 @@ public class ConversationsController : ControllerBase
             .ToListAsync();
 
         return chatMessages;
+    }
+
+    /// <summary>
+    /// Gets the rate limit status for an anonymous session.
+    /// </summary>
+    /// <remarks>This endpoint allows anonymous users to check their remaining message quota, current count, and reset time.
+    /// It's useful for displaying rate limit information in the UI before attempting to send messages.</remarks>
+    /// <param name="sessionId">The session ID of the anonymous user. Must be a valid GUID.</param>
+    /// <returns>A <see cref="RateLimitStatus"/> object containing details about the user's rate limit status,
+    /// including remaining messages and reset time.</returns>
+    [HttpGet("anonymous/rate-limit-status")]
+    public async Task<ActionResult<RateLimitStatus>> GetRateLimitStatus([FromQuery] string sessionId)
+    {
+        if (!Guid.TryParse(sessionId, out var parsedSessionId))
+        {
+            return BadRequest("Invalid session ID");
+        }
+
+        var ipAddress = _ipAddressService.GetClientIpAddress(HttpContext);
+        var status = await _anonymousSessionService.CheckRateLimitAsync(parsedSessionId, ipAddress);
+
+        return Ok(status);
     }
 
 

@@ -10,6 +10,8 @@ public class UserPreference
     {
         CreatedAt = DateTime.UtcNow;
         UpdatedAt = DateTime.UtcNow;
+        IsLongTermMemoryEnabled = null;
+        IsMemorySearchEnabled = null;
     }
 
     public Guid Id { get; set; }
@@ -29,6 +31,33 @@ public class UserPreference
     /// </summary>
     public Guid SelectedAgentId { get; set; }
     
+    /// <summary>
+    /// Indicates whether Long-Term Memory feature is enabled for this user/session.
+    /// When false, no memories will be extracted or stored for this user.
+    /// Default: null
+    /// </summary>
+    public bool? IsLongTermMemoryEnabled { get; set; }
+    
+    /// <summary>
+    /// Indicates whether Memory Search feature is enabled for this user/session.
+    /// When false, no memories will be retrieved and injected into chat context.
+    /// Note: This only affects memory retrieval, not memory storage.
+    /// Default: null
+    /// </summary>
+    public bool? IsMemorySearchEnabled { get; set; }
+
+    /// <summary>
+    /// The preferred UI appearance theme ("light" or "dark").
+    /// Null means the app default (light) is used.
+    /// </summary>
+    public string? AppearanceTheme { get; set; }
+
+    /// <summary>
+    /// The preferred accent color key ("default", "violet", "green", "yellow", "orange").
+    /// Null means the app default is used.
+    /// </summary>
+    public string? AccentColor { get; set; }
+
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }

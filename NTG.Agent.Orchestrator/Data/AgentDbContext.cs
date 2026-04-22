@@ -1,10 +1,12 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NTG.Agent.Common.Dtos.Constants;
+using NTG.Agent.Orchestrator.Models.AnonymousSessions;
 using NTG.Agent.Orchestrator.Models.Chat;
 using NTG.Agent.Orchestrator.Models.Documents;
 using NTG.Agent.Orchestrator.Models.Identity;
 using NTG.Agent.Orchestrator.Models.Tags;
+using NTG.Agent.Orchestrator.Models.TokenUsage;
 using NTG.Agent.Orchestrator.Models.UserPreferences;
 namespace NTG.Agent.Orchestrator.Data;
 
@@ -39,6 +41,10 @@ public class AgentDbContext(DbContextOptions<AgentDbContext> options) : DbContex
 
     public DbSet<UserPreference> UserPreferences { get; set; } = null!;
 
+    public DbSet<TokenUsage> TokenUsages { get; set; } = null!;
+
+    public DbSet<AnonymousSession> AnonymousSessions { get; set; } = null!;
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         var guidToString = new ValueConverter<Guid, string>(
@@ -46,8 +52,16 @@ public class AgentDbContext(DbContextOptions<AgentDbContext> options) : DbContex
            s => Guid.Parse(s)
         );
 
-        modelBuilder.Entity<User>()
-                    .ToTable("AspNetUsers", t => t.ExcludeFromMigrations());
+        modelBuilder.Entity<User>(b =>
+        {
+            b.ToTable("AspNetUsers", t => t.ExcludeFromMigrations());
+            b.HasKey(x => x.Id);
+
+            b.Property(x => x.Id)
+                .HasConversion(guidToString)
+                .HasColumnType("nvarchar(450)")
+                .ValueGeneratedNever();
+        });
 
         modelBuilder.Entity<Role>(b =>
         {
@@ -189,21 +203,49 @@ public class AgentDbContext(DbContextOptions<AgentDbContext> options) : DbContex
         modelBuilder.Entity<UserPreference>(e =>
         {
             e.HasKey(x => x.Id);
-            
+
             // Create unique index on UserId (for authenticated users)
             e.HasIndex(x => x.UserId)
                 .IsUnique()
                 .HasFilter("[UserId] IS NOT NULL");
-            
+
             // Create unique index on SessionId (for anonymous users)
             e.HasIndex(x => x.SessionId)
                 .IsUnique()
                 .HasFilter("[SessionId] IS NOT NULL");
-            
+
             // Ensure either UserId or SessionId is provided, but not both
             e.ToTable(t => t.HasCheckConstraint(
                 "CK_UserPreference_UserIdOrSessionId",
                 "([UserId] IS NOT NULL AND [SessionId] IS NULL) OR ([UserId] IS NULL AND [SessionId] IS NOT NULL)"));
+        });
+
+        modelBuilder.Entity<TokenUsage>(e =>
+        {
+            e.HasKey(x => x.Id);
+            
+            // Ensure either UserId or SessionId is provided, but not both
+            e.ToTable(t => t.HasCheckConstraint(
+                "CK_TokenUsage_UserIdOrSessionId",
+                "([UserId] IS NOT NULL AND [SessionId] IS NULL) OR ([UserId] IS NULL AND [SessionId] IS NOT NULL)"));
+        });
+
+        // AnonymousSession configuration
+        modelBuilder.Entity<AnonymousSession>(e =>
+        {
+            e.HasKey(x => x.Id);
+            
+            // Create unique index on SessionId for fast lookups
+            e.HasIndex(x => x.SessionId).IsUnique();
+            
+            // Create index on IpAddress for IP-based queries
+            e.HasIndex(x => x.IpAddress);
+            
+            // Create index on LastMessageAt for cleanup queries
+            e.HasIndex(x => x.LastMessageAt);
+            
+            e.Property(x => x.IpAddress)
+                .HasMaxLength(45); // IPv6 max length
         });
     }
 }

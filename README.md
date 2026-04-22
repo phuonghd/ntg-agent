@@ -83,6 +83,49 @@ The Provider Endpoint: https://generativelanguage.googleapis.com/v1beta/
 To get started easily, we use the shared cookies approach. In NTG.Agent.Admin, we add YARP as a BFF (Backend for Frontend), which forwards API requests to NTG.Agent.Orchestrator.
 Currently, it only works for Blazor WebAssembly. Cookies are not included when the request is made from the server (Blazor).
 
+## Long Term Memory Configuration
+
+The Long Term Memory (LTM) feature allows the chatbot to remember user-specific information across conversations. This feature can be controlled via configuration to manage token consumption:
+
+```json
+{
+  "LongTermMemory": {
+    "Enabled": true,
+    "MinimumConfidenceThreshold": 0.3,
+    "MaxMemoriesToRetrieve": 20
+  }
+}
+```
+
+- Set `Enabled: false` to disable memory extraction and retrieval, saving tokens
+- Adjust `MinimumConfidenceThreshold` to control quality of stored memories
+- Modify `MaxMemoriesToRetrieve` to balance context vs. token usage
+
+## Azure AI Document Intelligence Configuration (Optional)
+
+Azure AI Document Intelligence enables file upload in the chat, allowing users to attach documents (PDFs, images, Office files, etc.) and ask questions about their content. **This feature is entirely optional** — the chat works normally without it.
+
+To set it up, follow the official guide to create an Azure AI Document Intelligence resource:
+[Create a Document Intelligence resource](https://learn.microsoft.com/en-us/azure/ai-services/document-intelligence/how-to-guides/create-document-intelligence-resource?view=doc-intel-4.0.0)
+
+Once you have the resource endpoint and API key, add the following to your user secrets or `appsettings.Development.json` in the **NTG.Agent.Orchestrator** project:
+
+```json
+{
+  "Azure": {
+    "DocumentIntelligence": {
+      "IsEnabled": true,
+      "Endpoint": "https://<your-resource-name>.cognitiveservices.azure.com/",
+      "ApiKey": "<your-api-key>"
+    }
+  }
+}
+```
+
+- `IsEnabled` defaults to `false`. Set it to `true` only when you have a valid Azure subscription and resource configured.
+- When `IsEnabled` is `false`, the file upload button is hidden in the chat UI and no OCR processing is performed.
+- The API key is sensitive — use [user secrets](https://learn.microsoft.com/en-us/aspnet/core/security/app-secrets) in development and environment variables or Azure Key Vault in production. Do not commit it to source control.
+
 ## Contributing
 
 - Give us a star
